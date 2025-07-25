@@ -1,73 +1,129 @@
-from datetime import datetime
 import json
-import os
+from datetime import datetime, date
 
-task_calendar = {}
-DATA_FILE = "tasks.json"
+class Task:
+    def __init__(self, name, completed=False):
+        self.name = name
+        self.completed = completed
 
-def load_tasks():
-    global task_calendar
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r") as f:
-            raw_data = json.load(f)
-            # Convert date strings back into datetime.date objects
-            task_calendar = {
-                datetime.strptime(date, "%Y-%m-%d").date(): tasks
-                for date, tasks in raw_data.items()
-            }
+    def __repr__(self):
+        status = "✅" if self.completed else "❌"
+        return f"{status} {self.name}"
 
-def save_tasks():
-    with open(DATA_FILE, "w") as f:
-        json.dump({str(date): tasks for date, tasks in task_calendar.items()}, f)
+class TaskTracker:
+    def __init__(self, data_file="tasks.json"):
+        self.data_file = data_file
+        self.task_calendar = {}
+
+    def add_task(self, task_name, date_str):
+        try:
+            due_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            print("❌ Invalid date format. Use YYYY-MM-DD.")
+            return
+
+        task = Task(task_name)
+        if due_date not in self.task_calendar:
+            self.task_calendar[due_date] = []
+        self.task_calendar[due_date].append(task)
+        self.save_tasks()
+        print(f"✅ Task added for {due_date}: {task.name}")
+
+    def view_tasks(self):
+        if not self.task_calendar:
+            print("📭 No tasks scheduled.")
+            return
+
+        print("\n🗓️ Your Task Calendar:")
+        for d in sorted(self.task_calendar):
+            print(f"\n📆 {d}:")
+            for i, task in enumerate(self.task_calendar[d], 1):
+                print(f"  {i}. {task}")
+
+    def complete_task(self, date_str, task_number):
+        try:
+            due_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            tasks = self.task_calendar[due_date]
+            task_index = int(task_number) - 1
+
+            if 0 <= task_index < len(tasks):
+                tasks[task_index].completed = True
+                self.save_tasks()
+                print(f"✅ Marked complete: {tasks[task_index].name}")
+            else:
+                print("❌ Invalid task number.")
+        except (ValueError, KeyError):
+            print("❌ Invalid date or task number.")
+
+    def delete_task(self, date_str, task_number):
+        try:
+            due_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            tasks = self.task_calendar[due_date]
+            task_index = int(task_number) - 1
+
+            if 0 <= task_index < len(tasks):
+               deleted = tasks.pop(task_index)
+               if not tasks:
+                del self.task_calendar[due_date]  # Clean up empty dates
+               self.save_tasks()
+               print(f"🗑️ Deleted: {deleted.name}")
+            else:
+             print("❌ Invalid task number.")
+        except (ValueError, KeyError):
+            print("❌ Invalid date or task number.")
+
+
+    def save_tasks(self):
+        raw_data = {
+            str(d): [task.__dict__ for task in tasks]
+            for d, tasks in self.task_calendar.items()
+        }
+        with open(self.data_file, "w") as f:
+            json.dump(raw_data, f)
+
+    def load_tasks(self):
+        try:
+            with open(self.data_file, "r") as f:
+                raw_data = json.load(f)
+            for d, tasks in raw_data.items():
+                date_obj = datetime.strptime(d, "%Y-%m-%d").date()
+                self.task_calendar[date_obj] = [Task(**t) for t in tasks]
+        except FileNotFoundError:
+            pass
 
 def show_menu():
     print("\n📅 Task Calendar")
     print("1. Add a Task")
     print("2. View Tasks by Date")
-    print("3. Exit")
+    print("3. Mark Task Complete")
+    print("4. Delete a Task")
+    print("5. Exit")
 
-def add_task():
-    task = input("Enter your task: ")
-    date_str = input("Enter the due date (YYYY-MM-DD): ")
 
-    try:
-        date = datetime.strptime(date_str, "%Y-%m-%d").date()
-    except ValueError:
-        print("❌ Invalid date format. Use YYYY-MM-DD.")
-        return
+if __name__ == "__main__":
+    tracker = TaskTracker()
+    tracker.load_tasks()
 
-    if date not in task_calendar:
-        task_calendar[date] = []
-
-    task_calendar[date].append(task)
-    save_tasks()
-    print(f"✅ Task added for {date}: {task}")
-
-def view_tasks():
-    if not task_calendar:
-        print("📭 No tasks scheduled.")
-        return
-
-    print("\n🗓️ Your Task Calendar:")
-    for date in sorted(task_calendar):
-        print(f"\n📆 {date}:")
-        for i, task in enumerate(task_calendar[date], 1):
-            print(f"  {i}. {task}")
-
-# Load existing tasks when the app starts
-load_tasks()
-
-# App loop
 while True:
     show_menu()
-    choice = input("Choose an option (1–3): ")
+    choice = input("Choose an option (1–5): ")
 
     if choice == "1":
-        add_task()
+        task = input("Enter your task: ")
+        date_str = input("Enter the due date (YYYY-MM-DD): ")
+        tracker.add_task(task, date_str)
     elif choice == "2":
-        view_tasks()
+        tracker.view_tasks()
     elif choice == "3":
+        date_str = input("Enter the date of the task to mark complete (YYYY-MM-DD): ")
+        task_num = input("Enter the task number: ")
+        tracker.complete_task(date_str, task_num)
+    elif choice == "4":
+        date_str = input("Enter the date of the task to delete (YYYY-MM-DD): ")
+        task_num = input("Enter the task number: ")
+        tracker.delete_task(date_str, task_num)
+    elif choice == "5":
         print("👋 Goodbye!")
         break
     else:
-        print("❗ Invalid option. Please choose 1, 2, or 3.")
+        print("❗ Invalid option. Please choose 1 to 5.")
